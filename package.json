@@ -1,0 +1,24 @@
+{
+  "author": {
+    "name": "Gergely Laborci"
+  },
+  "bin": {
+    "kuli": "./index.js"
+  },
+  "bundleDependencies": [],
+  "dependencies": {
+    "change-case": "^4.1.1",
+    "terminal-kit": "^1.35.2",
+    "twig": "^1.15.1",
+    "xmlhttprequest": "^1.8.0"
+  },
+  "deprecated": false,
+  "description": "",
+  "license": "ISC",
+  "main": "index.js",
+  "name": "kuli",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "version": "1.0.3"
+}
