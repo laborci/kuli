@@ -20,38 +20,44 @@ Twig.extendFilter("snakeCase", (value) => ccase.snakeCase(value));
 
 const cwd = process.cwd() + "/";
 
+const KULI_SLAVES = cwd + '.kuli-slaves';
+const KULI_CONFIG = cwd + 'kuli.json';
+
 if (process.argv[process.argv.length - 1] === "init") {
-	if(!fs.existsSync(cwd + 'slave.json')) {
-		fs.writeFileSync(cwd + 'slave.json', JSON.stringify({
-			"arguments": {},
-			"ENV": {},
-			"slaves": {"brick": "https://raw.githubusercontent.com/laborci/slaves/master/brick"}
+	if (!fs.existsSync(KULI_CONFIG)) {
+		fs.writeFileSync(KULI_CONFIG, JSON.stringify({
+			ENV: {},
+			slaves: {
+				brick: {
+					src: "https://raw.githubusercontent.com/laborci/slaves/master/brick",
+					arguments: {}
+				}
+			}
 		}, null, '\t'));
-		terminal.green("Slaves initialized")("\n");
-	}else{
-		terminal.red("Slaves already initialized")("\n");
+		terminal.green("Kuli initialized")("\n");
+	} else {
+		terminal.red("Kuli already initialized")("\n");
 	}
 }
 
-
 try {
-	fs.accessSync('slave.json', fs.constants.R_OK | fs.constants.W_OK);
+	fs.accessSync(KULI_CONFIG, fs.constants.R_OK | fs.constants.W_OK);
 } catch (err) {
-	terminal.red('First init your slaves!')("\n");
+	terminal.red('First do "kuli init"!')("\n");
 	process.exit();
 }
 
 try {
-	fs.accessSync('.slaves', fs.constants.R_OK | fs.constants.W_OK);
+	fs.accessSync(KULI_SLAVES, fs.constants.R_OK | fs.constants.W_OK);
 } catch (err) {
-	terminal.green('.slaves created')("\n");
-	fs.mkdirSync('.slaves');
-	fs.writeFileSync(cwd + '.slaves/loc.json', "{}");
+	fs.mkdirSync(KULI_SLAVES);
+	fs.writeFileSync(KULI_SLAVES + '/loc.json', "{}");
+	terminal.green('slavery created')("\n");
 }
 
 
 // * * *  LOAD CONFIG
-let config = require(cwd + "slave.json");
+let config = require(KULI_CONFIG);
 if (typeof config.ENV === 'object') {
 	for (let env in config.ENV) if (config.ENV.hasOwnProperty(env)) {
 		if (typeof config.ENV[env] === 'string') {
@@ -66,17 +72,20 @@ if (process.argv[process.argv.length - 1] === "update") {
 	for (let name in config.slaves) {
 		terminal.cyan("[" + name + "]")("\n");
 
-		let dir = '.slaves/' + name;
+		let dir = KULI_SLAVES + '/' + name;
 		try {
 			fs.accessSync(dir, fs.constants.R_OK | fs.constants.W_OK);
 		} catch (err) {
 			terminal.green(dir + ' directory created')("\n");
 			fs.mkdirSync(dir);
 		}
-		fs.writeFileSync(dir + '/slave.json', download(config.slaves[name] + '/slave.json'));
-		let slave = require(cwd + dir + '/slave.json')
-		for (let template in slave.templates) {
-			fs.writeFileSync(dir + '/' + template, download(config.slaves[name] + '/' + template));
+		if (typeof config.slaves[name].src === "string") {
+			let src = config.slaves[name].src;
+			fs.writeFileSync(dir + '/slave.json', download(src + '/slave.json'));
+			let slave = require(dir + '/slave.json')
+			for (let template in slave.templates) {
+				fs.writeFileSync(dir + '/' + template, download(src + '/' + template));
+			}
 		}
 	}
 	terminal.green('done')("\n");
@@ -88,7 +97,7 @@ if (process.argv[process.argv.length - 1] === "update") {
 // * * *  DO
 if (process.argv[process.argv.length - 2] === "do") {
 	let name = process.argv[process.argv.length - 1];
-	let dir = cwd + '.slaves/' + name
+	let dir = KULI_SLAVES + '/' + name
 	try {
 		fs.accessSync(dir + '/slave.json', fs.constants.R_OK | fs.constants.W_OK);
 	} catch (err) {
@@ -100,13 +109,15 @@ if (process.argv[process.argv.length - 2] === "do") {
 		terminal.cyan("[" + name + "]")("\n");
 
 		let args = {"ENV": config.ENV};
-		if (typeof config.arguments[name] === 'object') slave.arguments = Object.assign(slave.arguments, config.arguments[name]);
+		if (typeof config.slaves[name].arguments === 'object') slave.arguments = Object.assign(slave.arguments, config.slaves[name].arguments);
 
 		for (let argument in slave.arguments) if (slave.arguments.hasOwnProperty(argument)) {
-			terminal.green(argument + ': ');
+			terminal.green('"' + argument + '": ');
 			if (typeof slave.arguments[argument] === 'string') {
 				args[argument] = Twig.twig({data: slave.arguments[argument]}).render(args);
 				terminal(args[argument]);
+			} else if(slave.arguments[argument] === null) {
+				args[argument] = await terminal.inputField().promise;
 			} else {
 				let def = ""
 				if (typeof slave.arguments[argument].default === 'string') {
@@ -117,19 +128,20 @@ if (process.argv[process.argv.length - 2] === "do") {
 			terminal("\n");
 		}
 
-		let locations = require(cwd + '.slaves/loc.json');
+		let locations = require(KULI_SLAVES + '/loc.json');
 		let defaultLocation = typeof locations[name] === 'string' ? locations[name] : "";
 
-		terminal.cyan('location: ');
+		terminal.cyan('output folder: ');
 		let location = await terminal.inputField({default: defaultLocation}).promise;
 		terminal("\n");
 		if (location === '') {
 			terminal.red('exit');
+			terminal.bell()
 			process.exit();
 		}
 
 		locations[name] = location;
-		fs.writeFileSync(cwd + '.slaves/loc.json', JSON.stringify(locations));
+		fs.writeFileSync(KULI_SLAVES + '/loc.json', JSON.stringify(locations));
 
 
 		fs.mkdirSync(cwd + location, {recursive: true});
@@ -140,7 +152,10 @@ if (process.argv[process.argv.length - 2] === "do") {
 			fs.writeFileSync(file, output);
 		}
 		terminal.green("done")("\n");
-	})().finally(() => process.exit());
+	})().finally(() => {
+		terminal.bell();
+		process.exit();
+	});
 }
 
 function download(url) {
