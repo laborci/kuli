@@ -48,7 +48,7 @@ You can load or define environment variables here
 
 ```json
 {
-	"slaves": {}
+	"slaves": {},
 	"ENV": {
 		"env" : "load-this-file.json",
 		"my-env": {
@@ -98,7 +98,7 @@ If the value is a `string` then it will be used but not asked. Just like the `cl
 
 #### null
 
-If its an `empty object` (or `null`) your attribute will not have a default value.
+If it is an `empty object` (or `null`) your attribute will not have a default value.
 
 #### default
 
