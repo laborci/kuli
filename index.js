@@ -20,7 +20,7 @@ Twig.extendFilter("snakeCase", (value) => ccase.snakeCase(value));
 
 const cwd = process.cwd() + "/";
 
-const KULI_SLAVES = cwd + '.kuli-slaves';
+let KULI_SLAVES = cwd + '.kuli-slaves';
 const KULI_CONFIG = cwd + 'kuli.json';
 
 if (process.argv[process.argv.length - 1] === "init") {
@@ -40,13 +40,37 @@ if (process.argv[process.argv.length - 1] === "init") {
 	}
 }
 
-try {
-	fs.accessSync(KULI_CONFIG, fs.constants.R_OK | fs.constants.W_OK);
-} catch (err) {
-	terminal.red('First do "kuli init"!')("\n");
-	process.exit();
+let config;
+let packagesjson = JSON.parse(fs.readFileSync(cwd + 'package.json'));
+if(typeof packagesjson.kuli === 'object'){
+	config = packagesjson.kuli;
+}else{
+	try {
+		fs.accessSync(KULI_CONFIG, fs.constants.R_OK | fs.constants.W_OK);
+		// * * *  LOAD CONFIG
+		config = require(KULI_CONFIG);
+		if (typeof config.ENV === 'object') {
+			for (let env in config.ENV) if (config.ENV.hasOwnProperty(env)) {
+				if (typeof config.ENV[env] === 'string') {
+					config.ENV[env] = JSON.parse(fs.readFileSync(config.ENV[env], "utf-8"));
+				}
+			}
+		}
+	} catch (err) {
+		terminal.red('First do "kuli init"!')("\n");
+		process.exit();
+	}
 }
 
+
+
+
+
+if(typeof config.path === "string"){
+	KULI_SLAVES = cwd + config.path;
+}
+
+// * * * TRY KULI STORAGE
 try {
 	fs.accessSync(KULI_SLAVES, fs.constants.R_OK | fs.constants.W_OK);
 } catch (err) {
@@ -55,16 +79,6 @@ try {
 	terminal.green('slavery created')("\n");
 }
 
-
-// * * *  LOAD CONFIG
-let config = require(KULI_CONFIG);
-if (typeof config.ENV === 'object') {
-	for (let env in config.ENV) if (config.ENV.hasOwnProperty(env)) {
-		if (typeof config.ENV[env] === 'string') {
-			config.ENV[env] = JSON.parse(fs.readFileSync(config.ENV[env], "utf-8"));
-		}
-	}
-}
 
 
 // * * *  UPDATE SLAVES
@@ -167,145 +181,3 @@ function download(url) {
 		return request.responseText;
 	}
 }
-
-
-//var ip = require("ip");
-//var clc = require('cli-color');
-//var express = require('express');
-//var bodyParser = require('body-parser');
-//var app = express();
-//var readline = require('readline');
-//var padleft = require('pad-left');
-//var highlight = require('cli-highlight').highlight;
-//
-//var index = 0;
-//var traces = [];
-//var requestid = null;
-//
-//app.use(bodyParser.json({limit: '10mb', extended: true}))
-//app.use(bodyParser.urlencoded({limit: '10mb', extended: true}))
-//
-//readline.emitKeypressEvents(process.stdin);
-//process.stdin.setRawMode(true);
-//
-//process.stdin.on('keypress', (str, key) => {
-//	if(key.name === 'q' || (key.ctrl && key.name==='c')){
-//		console.log('bye')
-//		process.exit();
-//	}else if(key.name === 'return'){
-//		readline.clearLine(process.stdout, 0);
-//		if(index === 0){
-//			process.stdout.write("No trace\033[0G");
-//		}else{
-//			showtrace(index);
-//		}
-//	}else if(key.name === 'space'){
-//		const blank = '\n'.repeat(process.stdout.rows);
-//		console.log(blank);
-//		readline.cursorTo(process.stdout, 0, 0);
-//		readline.clearScreenDown(process.stdout);
-//		console.log('- - - - - - - - - - - - - - - - - - - - - ');
-//	}else if(key.name === 'up' || key.name === 'down'){
-//		readline.clearLine(process.stdout, 0);
-//		if(index === 0){
-//			process.stdout.write("No trace\033[0G");
-//		}else{
-//			if(key.name === 'up' && index > 1) index--;
-//			if(key.name === 'down' && index < traces.length) index++;
-//			process.stdout.write("Show trace: " + index + "\033[0G");
-//		}
-//	}
-//});
-//
-//app.use(bodyParser.json());
-//
-//app.use('/', function(req, res){
-//	message(req.body);
-//	res.send('thankyou');
-//});
-//
-//
-//
-//var server = app.listen(8881, '127.0.0.1', () => {
-//	var host = server.address().address;
-//	var port = server.address().port;
-//	console.log("Logtail listening at http://%s:%s", host, port);
-//});
-//
-//function message(log){
-//	var timestamp = new Date();
-//
-//	if(requestid !== log.request.id){
-//		requestid = log.request.id;
-//		console.log(
-//			"\n" +
-//			styles.header.time(
-//				padleft(timestamp.getHours(), 2, '0') + ':' +
-//				padleft(timestamp.getMinutes(), 2, '0') + ':' +
-//				padleft(timestamp.getSeconds(), 2, '0')
-//			) + ' ' +
-//			styles.header.method('[' + log.request.method + ']') + ' ' +
-//			styles.header.path(log.request.path) + ' ' +
-//			styles.header.host(log.request.host) + ' ' +
-//			styles.header.host('('+log.request.id+')')
-//		);
-//	}
-//	if(log.type == 'error' || log.type == 'exception') errorlog(log.message);
-//	else if(log.type == 'sql') sqlLog(log.message);
-//	else console.log(clc.cyan('[info] ') + highlight(JSON.stringify(log.message, null, 2), {language: 'json'}));
-//}
-//
-//function sqlLog(message){
-//	console.log(
-//		clc.blue('[SQL]: ') + highlight(message, {language: 'sql', ignoreIllegals: true})
-//	);
-//}
-//
-//function errorlog(message){
-//
-//	var trace = '';
-//	message.trace.forEach((trc, index) => {
-//		trace +=
-//			styles.trace.index('[' + index + '] ') +
-//			(typeof styles.class !=='undefined' ? styles.trace.class(trc.class) : '')+
-//			(typeof styles.trace !=='undefined' ? styles.trace.type(trc.type) : '')+
-//			styles.trace.function(trc.function) +
-//			' @' + trc.line + '' + "\n";
-//
-//		if(Array.isArray(trc.args) && trc.args.length) trace += highlight(JSON.stringify(trc.args, null, 2), {language: 'json'}) + "\n";
-//	});
-//
-//	traces.push(trace);
-//	index = traces.length;
-//
-//	traceno = traces.length;
-//
-//	type = message.errorlevel ? message.errorlevel : message.type;
-//	console.log(
-//		clc.red.bold.blink('[' + type + '] ') +
-//		clc.cyan(message.file) + ' @' +
-//		message.line +
-//		clc.blue(' (trace#' + traceno + ')')
-//	);
-//	console.log(message.message);
-//}
-//
-//function showtrace(number){
-//	console.log(clc.blue(' (trace#' + number + ')'));
-//	console.log(traces[number - 1]);
-//}
-//
-//var styles = {
-//	header: {
-//		time  : clc.white.bold,
-//		host  : clc.blackBright,
-//		method: clc.green.bold,
-//		path  : clc.blue
-//	},
-//	trace : {
-//		index   : clc.blackBright,
-//		class   : clc.cyan,
-//		type    : clc.white,
-//		function: clc.green
-//	}
-//};
